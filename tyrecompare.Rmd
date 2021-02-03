@@ -1,0 +1,475 @@
+---
+title: "Report on analysis of data from tyrecompare.com.au"
+author: "Vineet W. Singh"
+date: "10 November 2018"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Introduction
+
+This document outlines analysis performed on data provided by Matthew Banks of www.tyrecompare.com.au.  
+
+Matthew wished to have answers to the following questions:  
+1) Based on quote requests, from which areas did the most requests come from?  
+2) Based on quote requests, which are the most popular tyre sizes?  
+
+From the analysis, it was determined as to which areas (based on postcodes) generated the maximum amount of queries on the website and which sizes are the most popular based on the number of queries for particular tyre sizes. 
+
+## Method
+
+The data is stored in tables in an SQL Server database. Access to the SQL Server database was provided by Matt. The structure of the SQL database was looked at and the tables searched manually to locate data relevant for the purpose of this study.  
+It was found that data in one table ("QuoteRequests") was relevant for this study. 
+The data was downloaded by the program by submitting a SQL query that only selected the parameters required. No other data was downloaded.  
+The data for all the parameters was classified as qualitative data, cleaned to remove invalid data and calculations made to provide some results on which this analysis is based. 
+
+Note: Line beginning with ## denotes program output. 
+
+### Cleaning of data
+Each row represents one quote in the QuoteRequests table. 
+
+### Number of records loaded from SQL Server
+```{r chunk1}
+suppressPackageStartupMessages(library("dplyr"))
+suppressPackageStartupMessages(library("ggplot2"))
+
+
+#load the data
+load("tyreData.rda")
+
+# total number of records loaded
+outMsg<-paste("Total Number of records loaded from SQL Server database:", dim(data)[1])
+writeLines(outMsg)
+
+#check for complete cases
+dataC<-data[which(complete.cases(data)),]
+
+```
+
+### No of complete and incomplete records 
+```{r chunk2}
+#check for complete cases
+dataC<-data[which(complete.cases(data)),]
+
+outMsg<-paste("Number of complete records found:", dim(dataC)[1])
+writeLines(outMsg)
+
+#find number of incomplete entries
+incompleteEntries<-dim(data)[1]-dim(dataC)[1]
+nrows1<-dim(dataC)[1]
+
+outMsg<-paste("Number of incomplete records found:", incompleteEntries)
+writeLines(outMsg)
+
+```
+
+### Number of Invalid records
+
+On exploration of data, it was found that some parameters (fields in a row/record) had the following values:  
+
+Postcode: 0 or blank  
+Profile: 0  
+Rim: 0  
+
+The number of records that contained these entries were: 
+```{r chunk3}
+#original data size
+originalDataSize<-dim(dataC)[1]
+
+#find invalid tyre profiles
+dataC<-dataC[which(dataC$TyreProfile!="0"),]
+
+#find number of invalid tyre profiles
+invalidTyreProfile<-nrows1-dim(dataC)[1]
+nrows2<-dim(dataC)[1]
+
+outMsg<-paste("No of records with tyre profile = 0:", invalidTyreProfile)
+writeLines(outMsg)
+
+#find invalid tyre rim data
+dataC<-dataC[which(dataC$TyreRim!="0"),]
+
+#find number of invalid tyre rims
+invalidTyreRim<-nrows2-dim(dataC)[1]
+nrows3<-dim(dataC)[1]
+
+outMsg<-paste("No of records with tyre rim = 0:", invalidTyreRim)
+writeLines(outMsg)
+
+
+#find number of invalid postcodes
+dataC<-dataC[which((!((dataC$Postcode=="0")|(dataC$Postcode=="")))),]
+invalidPostcode<-nrows3-dim(dataC)[1]
+
+outMsg<-paste("No of records with postcode = 0 or blank:", invalidPostcode)
+writeLines(outMsg)
+
+outMsg<-paste("Total No. of records with field values as listed above:", invalidTyreProfile + invalidTyreRim + invalidPostcode)
+writeLines(outMsg)
+
+outMsg<-paste("Percentage Records with field values as above:", round(((invalidTyreProfile + invalidTyreRim + invalidPostcode)/originalDataSize)*100,2),"%")
+writeLines(outMsg)
+```
+
+Removing these records from the data can be done as they constitute less than 0.4% of the data pulled from the server. 
+
+## Analysis of requests received per year.  
+
+The records indicate that collection of data began sometime in 2015.  
+Dividing the data according to year it can be seen that the break up of quote requests per year are as per the following chart.  
+
+```{r chunk5}
+#queries by year analysis
+data2015<-dataC[which(dataC$year==2015),]
+data2016<-dataC[which(dataC$year==2016),]
+data2017<-dataC[which(dataC$year==2017),]
+data2018<-dataC[which(dataC$year==2018),]
+
+#percentage by year
+perc2015<-round((dim(data2015)[1]/dim(dataC)[1])*100,2)
+perc2016<-round((dim(data2016)[1]/dim(dataC)[1])*100,2)
+perc2017<-round((dim(data2017)[1]/dim(dataC)[1])*100,2)
+perc2018<-round((dim(data2018)[1]/dim(dataC)[1])*100,2)
+
+percentage<-c(perc2015,perc2016,perc2017,perc2018)
+years<-c("2015","2016","2017","2018")
+
+yearDf<-data.frame(years,percentage)
+
+p<-ggplot(data=yearDf, aes(x=years, y=percentage, fill=years)) +
+  geom_bar(stat="identity")+
+  geom_text(aes(label=percentage), vjust=-0.3, size=3.5)+
+  theme_minimal()
+p<-p+labs(x="Year",y="Percentage of total quote requests")
+show(p)
+
+monthData2015<-data2015 %>% group_by(month) %>% summarise(n=n())
+monthData2016<-data2016 %>% group_by(month) %>% summarise(n=n())
+monthData2017<-data2017 %>% group_by(month) %>% summarise(n=n())
+monthData2018<-data2018 %>% group_by(month) %>% summarise(n=n())
+
+monthlyAvg2015<-mean(monthData2015$n)
+sd2015<-round(sd(monthData2015$n))
+outMsg<-paste("Monthly average number of requests received in 2015:", round(monthlyAvg2015),"\nStandard Deviation +/-", sd2015)
+writeLines(outMsg)
+monthlyAvg2016<-mean(monthData2016$n)
+sd2016<-round(sd(monthData2016$n))
+outMsg<-paste("Monthly average number of requests received in 2016:", round(monthlyAvg2016),"\nStandard Deviation +/-", sd2016)
+writeLines(outMsg)
+monthlyAvg2017<-mean(monthData2017$n)
+sd2017<-round(sd(monthData2017$n))
+outMsg<-paste("Monthly average number of requests received in 2017:", round(monthlyAvg2017),"\nStandard Deviation+/-", sd2017)
+writeLines(outMsg)
+monthlyAvg2018<-mean(monthData2018$n)
+sd2018<-round(sd(monthData2018$n))
+outMsg<-paste("Monthly average number of requests received in 2018:", round(monthlyAvg2018),"\nStandard Deviation+/-", sd2018)
+writeLines(outMsg)
+
+overallAvg<-round(mean(c(monthlyAvg2017,monthlyAvg2018)))
+outMsg<-paste("Average monthly number of requests received in 2017 & 2018: ", overallAvg)
+writeLines(outMsg)
+```
+Year 2018 data is until the date of collection i.e. 10/11/2018.  
+Complete breakup of number of quote requests received per month is displayed in Appendix 3.  
+
+## Analysis of postcodes included in requests.  
+
+Requests were sorted by the postcodes entered by requesters. Analysis of the data according to the postcodes found that:  
+
+```{r chunk6}
+#postcode analysis
+#group data by postcode, sum up all by postcode and arrange by number 
+sortedPostcode<-dataC %>% group_by(Postcode) %>% summarise(n=n()) %>% arrange(desc(n))
+
+#sanity check this should equal to dim(dataC)[1] 
+totalQueries<-sum(sortedPostcode$n)
+
+#check how many entried in sorted postcode make up 90% of total queries 
+flag1<-TRUE
+ctr1<-1
+cumSum1<-0
+while(flag1){
+  cumSum1<-cumSum1+sortedPostcode[ctr1,]$n
+  if(round((cumSum1/totalQueries),digits = 2)>.90){
+    flag1<-FALSE
+  }
+  else{
+    ctr1<-ctr1+1
+  }
+}
+
+#subset the postcodes that make up 90% of the queries
+sortedSubsetPostCode<-sortedPostcode[seq(1,ctr1),]
+
+#what is the percentage of postcodes that make up 90% of the queries
+percPostCodes<-round((dim(sortedSubsetPostCode)[1]/dim(sortedPostcode)[1])*100,2)
+
+outMsg<-paste("Quote requests from",ctr1,"postcodes make up 90% of the total requests and this is around",percPostCodes,"%\n of all postcodes found in the data.")
+
+outMsg2<-paste("\nIn other words, requesters belonging to", ctr1, "postcode areas,\n submitted 90% of all quote requests")
+
+writeLines(paste(outMsg,outMsg2))
+```
+
+Each quote request was classified and given an area label according to the postcode included in the request. The number of requests grouped by area was then computed. The grouped figures were converted to percentages and cummalative percentages. The results are presented as a bar chart.   
+```{r chunk9}
+#include a package
+library(varhandle)
+#copy the data to a different frame
+dataC1<-dataC
+#unfactor the postcode to label the area
+dataC1$Postcode<-unfactor(dataC1$Postcode)
+#add a new column for area
+dataC1$PostArea<-""
+#sort each row into different areas according to postcode
+dataC1[between(dataC1$Postcode,2600,2620),"PostArea"]<-"CANBERRA"
+dataC1[between(dataC1$Postcode,2000,2234),"PostArea"]<-"NSW-SYDNEY-METRO"
+dataC1[between(dataC1$Postcode,2235,2999),"PostArea"]<-"NSW-REST"
+dataC1[between(dataC1$Postcode,2235,2599),"PostArea"]<-"NSW-REST"
+dataC1[between(dataC1$Postcode,2621,2999),"PostArea"]<-"NSW-REST"
+dataC1[between(dataC1$Postcode,3000,3207),"PostArea"]<-"VIC-MELBOURNE-METRO"
+dataC1[between(dataC1$Postcode,3208,3999),"PostArea"]<-"VIC-REST"
+dataC1[between(dataC1$Postcode,4000,4207),"PostArea"]<-"QLD-BRISBANE-METRO"
+dataC1[between(dataC1$Postcode,4300,4305),"PostArea"]<-"QLD-BRISBANE-METRO"
+dataC1[between(dataC1$Postcode,4500,4519),"PostArea"]<-"QLD-BRISBANE-METRO"
+dataC1[between(dataC1$Postcode,4208,4299),"PostArea"]<-"QLD-REST"
+dataC1[between(dataC1$Postcode,4306,4499),"PostArea"]<-"QLD-REST"
+dataC1[between(dataC1$Postcode,4520,4999),"PostArea"]<-"QLD-REST"
+dataC1[between(dataC1$Postcode,5000,5199),"PostArea"]<-"SA-ADELAIDE-METRO"
+dataC1[which(dataC1$Postcode==5950),"PostArea"]<-"SA-ADELAIDE-METRO"
+dataC1[between(dataC1$Postcode,5200,5749),"PostArea"]<-"SA-REST"
+dataC1[between(dataC1$Postcode,5825,5854),"PostArea"]<-"SA-REST"
+dataC1[between(dataC1$Postcode,6000,6199),"PostArea"]<-"WA-PERTH-METRO"
+dataC1[between(dataC1$Postcode,6200,6999),"PostArea"]<-"WA-REST"
+dataC1[between(dataC1$Postcode,7000,7099),"PostArea"]<-"TAS-HOBART-METRO"
+dataC1[between(dataC1$Postcode,7100,7999),"PostArea"]<-"TAS-REST"
+dataC1[between(dataC1$Postcode,0800,0832),"PostArea"]<-"NT-DARWIN-METRO"
+dataC1[between(dataC1$Postcode,0833,0899),"PostArea"]<-"NT-REST"
+#convert the area into a factor variable
+dataC1$PostArea<-as.factor(dataC1$PostArea)
+#group entries by area and count them up 
+sortedPostArea<-dataC1 %>% group_by(PostArea) %>% summarise(n=n()) %>% arrange(desc(n))
+#generate the percentage of queries by number of queries from each area
+sortedPostArea$Perc<-round((sortedPostArea$n/dim(dataC1)[1])*100,2)
+#generate the cummalative percentage
+sortedPostArea$CumPerc<-cumsum(sortedPostArea$Perc)
+
+#sorted subset of cummalative 
+sortedSubsetPostArea<-sortedPostArea[which(sortedPostArea$CumPerc<=97),]
+
+
+#generate a plot for displaying results
+p<-ggplot(data=sortedPostArea, aes(x=PostArea, y=Perc, fill=PostArea)) +
+  geom_bar(stat="identity")+
+  geom_text(aes(label=Perc), vjust=-0.3, hjust=0.5, size=2.75)+
+  scale_x_discrete(limits=sortedPostArea$PostArea)+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1,vjust=0.5))
+p<-p+labs(x="Area",y="Percentage of queries")
+p
+
+```
+Key to Labels.  
+1) Sydney Metro: areas with postcodes 2000 to 2234  
+2) Rest of NSW: areas with postcodes 2235 to 2599, 2621 to 2999  
+3) Canberra: areas with postcodes 2600 to 2620  
+4) Melbourne Metro: areas with postcodes 3000 to 3207  
+5) Rest of Victoria: areas with postcodes 3208 to 3999  
+6) Brisbane Metro: areas with postcodes 4000 to 4207, 4300 to 4305, 4500 to 4519  
+7) Rest of Queensland: areas with postcodes 4208 to 4299, 4306 to 4499, 4520 to 4999  
+8) Adelaide Metro: areas with postcodes 5000 to 5199, 5950  
+9) Rest of SA: areas with postcodes 5200 to 5749, 5825 to 5854  
+10) Perth Metro: areas with postcodes 6000 to 6199  
+11) Rest of WA: areas with postcodes 6200 to 6999  
+12) Hobart Metro: areas with postcodes 7000 to 7099  
+13) Rest of Tasmania: areas with postcodes 7100 to 7999  
+14) Darwin Metro: areas with postcodes 0800 to 0832  
+15) Rest of NT: areas with postcodes 0833 to 0899  
+
+From the bar chart and results, it can be inferred that:  
+A) There were no quote requests from Canberra.  
+B) 96% of the quote requests came from the following areas:  
+1) Sydney Metro  
+2) Rest of NSW  
+3) Melbourne Metro    
+4) Perth Metro  
+5) Brisbane Metro   
+6) Rest of Queensland  
+7) Adelaide Metro  
+8) Rest of Victoria  
+
+The cummaltive percentages of requests according to the areas limited to 96% of the queries is as per the chart below. 
+
+```{r chunk91}
+
+p<-ggplot(data=sortedSubsetPostArea, aes(x=PostArea, y=CumPerc, fill=PostArea)) +
+  geom_bar(stat="identity")+
+  geom_text(aes(label=CumPerc), vjust=-0.3, hjust=0.5, size=2.75)+
+  scale_x_discrete(limits=sortedSubsetPostArea$PostArea)+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1,vjust=0.5))
+p<-p+labs(x="Area",y="Cummalative percentage of queries")
+p
+```
+
+## Analysis of requests by Tyre sizes.  
+### Most popular tyre sizes according to quote requests. 
+
+The data was analysed to find the most popular tyre sizes.
+Results are as under: 
+```{r chunk7}
+#sort by all three, width, profile, rim
+sortedTyres<-dataC %>% group_by(TyreWidth,TyreProfile,TyreRim) %>% summarise(n=n()) %>% arrange(desc(n))
+
+#number of different sizes available 
+noTyreSizes<-dim(sortedTyres)[1]
+
+outMsg<-paste("Total number of",  noTyreSizes, "different tyre types (according to Width, Profile, Rim) were found\n in the requests data")
+
+writeLines(outMsg)
+
+#check how many rows of sortedTyres make up 90% of the queries
+flag2<-TRUE
+ctr2<-1
+cumtotalQueries<-0
+while(flag2){
+  cumtotalQueries<-cumtotalQueries+sortedTyres[ctr2,]$n
+  if(round((cumtotalQueries/totalQueries),digits = 2)>.90){
+    flag2<-FALSE
+  }
+  else{
+    ctr2<-ctr2+1
+  }
+}
+
+#% of tyre sizes that account for 90% of the queries
+percTyreSizes<-round((ctr2/noTyreSizes)*100,2)
+
+outMsg<-paste("Quote requests for",ctr2,"tyre types make up 90% of the total requests\n and this is around",percTyreSizes,"% of all tyre types found in the data.")
+
+writeLines(outMsg)
+```
+
+The following graph shows the % of quote requests for the top 20/40/60/80 tyre types:  
+```{r chunk8}
+
+#subset the number of rows that make up 90% of the data 
+subsetSortedTyres<-sortedTyres[seq(1,ctr2),]
+
+#genrate a column that describes % of total queries
+subsetSortedTyres$Percentage<-round((subsetSortedTyres$n/totalQueries)*100,digits = 2)
+subsetSortedTyres$CumalativePercentage<-cumsum(subsetSortedTyres$Percentage)
+
+#further subset top 20 rows of the subseted tyres
+subset2SortedTyres<-subsetSortedTyres[seq(1,20),]
+
+#what % of queries do the top 20 tyre sizes make up
+percTop20Sizes<-sum(subset2SortedTyres$Percentage)
+
+#further subset top 40 rows of the subseted tyres
+subset3SortedTyres<-subsetSortedTyres[seq(1,40),]
+
+#what % of queries do the top 40 tyre sizes make up
+percTop40Sizes<-sum(subset3SortedTyres$Percentage)
+
+#further subset top 60 rows of the subseted tyres
+subset4SortedTyres<-subsetSortedTyres[seq(1,60),]
+
+#what % of queries do the top 60 tyre sizes make up
+percTop60Sizes<-sum(subset4SortedTyres$Percentage)
+
+#further subset top 80 rows of the subseted tyres
+subset5SortedTyres<-subsetSortedTyres[seq(1,80),]
+
+#what % of queries do the top 80 tyre sizes make up
+percTop80Sizes<-sum(subset5SortedTyres$Percentage)
+
+# display a graph for 20, 40 , 60 , 80
+top<-c("20","40","60","80")
+percentages<-c(percTop20Sizes,percTop40Sizes,percTop60Sizes,percTop80Sizes)
+topDf<-data.frame(top,percentages)
+
+p<-ggplot(data=topDf, aes(x=top, y=percentages, fill=top)) +
+  geom_bar(stat="identity")+
+  geom_text(aes(label=percentages), vjust=-0.3, size=3.5)+
+  theme_minimal()
+p<-p+labs(x="No. of top tyre types",y="Cummalative Percentage of quote requests")
+show(p)
+```
+The full table showing the top 144 tyre sizes appears in Appendix 2.
+
+\newpage
+## Conclusion  
+Data from www.tyrecompare.com.au was studied and the following inferences were made from the results obtained:  
+
+* Average number of requests received in 2017 and 2018 are around 19,000 requests per month.
+* People residing in the following areas of 828 postcodes:  
+1. Sydney Metro
+2. Rest of NSW
+3. Melbourne Metro
+4. Perth Metro
+5. Brisbane Metro
+6. Rest of Queensland
+7. Adelaide Metro
+submitted approximately 90% of the quote requests.  
+* Requests for 144 Tyre Sizes constituted approximately 90% of all quote requests.The ten most popular tyre sizes as under:
+1. 205 x 55 x 16
+2. 195 x 65 x 15
+3. 215 x 60 x 16
+4. 265 x 65 x 17
+5. 225 x 65 x 17
+6. 215 x 65 x 16
+7. 205 x 60 x 16
+8. 265 x 60 x 18
+9. 205 x 65 x 15
+10. 225 x 60 x 17  
+
+\newpage
+## Appendix 1
+Data on number of quote requests segregated on areas classified by postcode.  
+```{r chunk92}
+show(sortedPostArea)
+```
+\newpage
+## Appendix 2
+List of Top 144 tyre types according to Width x Profile x Rim size. Other columns denote percent and cumalative percent of all quote requests.  
+```{r chunk 10}
+outMsg<-"No. : Tyre Type      : Percent: Cumalative Percentage\n"
+writeLines(outMsg)
+for (ctr4 in seq(1,dim(subsetSortedTyres)[1])){
+  if (ctr4<10){
+    pading<-"  "
+  }
+  else if (ctr4<100){
+    pading<-" "
+  }
+  else{
+    pading<-""
+  }
+  pading<-paste0(pading,ctr4)
+  outMsg<-paste(pading,":", subsetSortedTyres[ctr4,]$TyreWidth,"x",subsetSortedTyres[ctr4,]$TyreProfile,"x",subsetSortedTyres[ctr4,]$TyreRim," : ", subsetSortedTyres[ctr4,]$Percentage," : ", subsetSortedTyres[ctr4,]$CumalativePercentage)
+  writeLines(outMsg)
+}
+```
+\newpage
+## Appendix 3
+Monthly requests in 2015  
+```{r chunk11}
+show(monthData2015)
+```
+Monthly requests in 2016  
+```{r chunk12}
+show(monthData2016)
+```
+Monthly requests in 2017  
+```{r chunk13}
+show(monthData2017)
+```
+Monthly requests in 2018  
+```{r chunk14}
+show(monthData2018)
+```
